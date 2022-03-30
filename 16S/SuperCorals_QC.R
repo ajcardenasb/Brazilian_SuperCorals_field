@@ -33,6 +33,13 @@ unwant_tax=tax %>% filter_all(any_vars(str_detect(., 'Mitochondria|Chloroplast')
 colnames(asv.o)
 asv.noConta=subset(asv.o, !rownames(asv.o) %in% rownames(Conta) & !rownames(asv.o) %in% rownames(unwant_tax))[,-c(1)]
 colnames(asv.noConta)
+
+# export fasta
+library(seqinr)
+fas=read.table("Input_files/SuperCorals_ASV_table_pooled.txt", header = TRUE, row.names = 1, sep = " ")[,25:26]
+fas.noConta=subset(fas, rownames(fas) %in% asv.noConta.f$Row.names) 
+write.fasta( sequences = as.list(fas.noConta$Sequence), names = rownames(fas.noConta),  nbchar = 80, file.out = "outputs/SuperCorals_noConta.fasta")
+
 dim(asv.noConta)
 
 #remove ASVs with only zeros

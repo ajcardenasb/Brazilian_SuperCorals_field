@@ -38,10 +38,13 @@ dim(asv.noConta)
 #remove ASVs with only zeros
 asv.noRare=asv.noConta[rowSums(asv.noConta[])>0,]
 
+#rename sample name and export
+colnames(asv.noRare)=gsub(".*E", "E", colnames(asv.noRare))
+colnames(asv.noRare)=gsub("\\..*", "", colnames(asv.noRare))
+
 # Export normalized and raw ASV tables
 asv.noConta.f=merge(asv.noRare, tax, by="row.names")
 
-#rename sample name
 write.table(asv.noConta.f, "./outputs/SuperCorals_ASVs_noContanoOut.raw.txt",  quote = FALSE, row.names=F, sep = "\t") 
 message("Number of ASVs used in the analysis: ", length(rownames(asv.noConta.f)))
 

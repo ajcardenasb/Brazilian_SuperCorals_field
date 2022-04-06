@@ -65,3 +65,6 @@ res4_sig$Comparison="Res F1xF2"
 message("Number of total DA genera: ", nrow(res4_sig), "\nNumber of DA genera enriched in F1: ", nrow(subset(res4_sig, Diff_more_abundant == "F1" )),  "\nNumber of DA genera enriched in F2: ", nrow(subset(res4_sig, Diff_more_abundant == "F2")))
 
 all=rbind(res1_sig, res2_sig, res3_sig, res4_sig)
+write.table(all, "outputs/ANCOM_Results.txt",  quote = F, sep = "\t")
+
+

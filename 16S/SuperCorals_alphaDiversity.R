@@ -1,62 +1,82 @@
-library(phyloseq)
-library(ggplot2)
 library(vegan)
+library(ggplot2)
+library(GUniFrac)
 
 setwd("~/Documents/Bioinformatics_scripts/R_scripts/SuperCorals/16S/")
 
 map=read.table("Input_files/metadata.txt", header = T, sep = "\t", row.names = 1)
 asv=read.table("outputs/SuperCorals_ASVs_noContanoOut.raw.txt", header = T, sep = "\t", row.names = 1)[,1:16]
 tax=read.table("outputs/SuperCorals_ASVs_noContanoOut.raw.txt", header = T, sep = "\t", row.names = 1)[,18:23]
-otu.t= otu_table(asv, taxa_are_rows=TRUE)
-sam.t= sample_data(data.frame(map))
-tax.t=tax_table(as.matrix(tax))
-phy= phyloseq(otu.t,  sam.t , tax.t)
 
-P2=c("#00607A", "#A44200")
+###rarefying
+cnts=t(asv)
+min(rowSums(cnts)) # determine sample with lowest counts
+asv.rar=Rarefy(cnts, 8582)$otu.tab.rff
 
-phy.t=microbiome::transform(phy, transform = "clr", target = "OTU", shift = 0, scale = 1)
-phy.t=microbiome::transform(phy, transform = "compositional", target = "OTU", shift = 0, scale = 1)
+############################################################
+##################### Alpha-diversity ######################
+############################################################
 
-ord = ordinate(phy.t, method = "PCoA", distance = "bray")
-ord = ordinate(phy.t, method = "RDA", distance = "euclidean")
-pdf("./outputs/16S_ordination.pdf", width=4.5,height=3, pointsize = 12)
-plot_ordination(phy.t,ord, color = "Phenotype", shape = "Time") + 
-  geom_point(size = 4, alpha = 1)  + 
-  scale_colour_manual(values=P2) + ggtitle("") +  
-  theme_bw() + theme( legend.position = 'bottom')
+alpha=as.data.frame(t(estimateR(asv.rar)))
+alpha$Shannon=diversity(asv.rar, index = "shannon")
+alpha$Time=map$Time[match(rownames(alpha), rownames(map))]
+alpha$Phenotype=map$Phenotype[match(rownames(alpha), rownames(map))]
+
+##################################################
+##################### Stats ######################
+##################################################
+#Shannon
+shapiro.test(alpha$Shannon) # p-value > 0.05 implying we can assume normality.
+anova_shan=summary(aov(alpha$index ~ alpha$Phenotype * alpha$Time))
+anova_shan_df=as.data.frame(anova[[1]])
+write.table(anova_shan_df, "outputs/anova_shannon.txt", sep = "\t", row.names = T, quote = F)
+TukeyHSD(aov(alpha$Shannon ~ alpha$Phenotype * alpha$Time))
+
+
+phen_t1=subset(alpha, Time == "F1" )
+pairwise.t.test(phen_t1$Shannon, phen_t1$Phenotype,  p.adj = "fdr", digits = 5)[[3]]
+phen_t2=subset(alpha, Time == "F2" )
+pairwise.t.test(phen_t2$Shannon, phen_t2$Phenotype,  p.adj = "fdr", digits = 5)[[3]]
+
+sen=subset(alpha, Phenotype == "Sensitive" )
+pairwise.t.test(sen$Shannon, sen$Time,  p.adj = "fdr", digits = 5)[[3]]
+res=subset(alpha, Phenotype == "Resistant" )
+pairwise.t.test(res$Shannon, res$Time,  p.adj = "fdr", digits = 5)[[3]]
+
+## Chao1
+shapiro.test(alpha$S.chao1) # p-value > 0.05 implying we can assume normality.
+anova_cha=summary(aov(alpha$S.chao1 ~ alpha$Phenotype * alpha$Time))
+anova_cha_df=as.data.frame(anova_cha[[1]])
+write.table(anova_cha_df, "outputs/anova_chao.txt", sep = "\t", row.names = T, quote = F)
+TukeyHSD(aov(alpha$S.chao1 ~ alpha$Phenotype * alpha$Time))
+
+phen_t1=subset(alpha, Time == "F1" )
+pairwise.t.test(phen_t1$S.chao1, phen_t1$Phenotype,  p.adj = "fdr", digits = 5)[[3]]
+phen_t2=subset(alpha, Time == "F2" )
+pairwise.t.test(phen_t2$S.chao1, phen_t2$Phenotype,  p.adj = "fdr", digits = 5)[[3]]
+
+sen=subset(alpha, Phenotype == "Sensitive" )
+pairwise.t.test(sen$Shannon, sen$Time,  p.adj = "fdr", digits = 5)[[3]]
+res=subset(alpha, Phenotype == "Resistant" )
+pairwise.t.test(res$Shannon, res$Time,  p.adj = "fdr", digits = 5)[[3]]
+
+
+# boxplots
+shan=ggplot(alpha, aes(x=Phenotype, y=Shannon, fill=Phenotype)) + 
+  stat_boxplot(geom = "errorbar")  + 
+  geom_boxplot(alpha = 1) +  
+  scale_fill_manual(values=c("#00607A", "#A44200"))  + 
+  facet_grid(~Time) + 
+  theme_bw() + labs( y= "Shannon diversity", x="") 
+
+
+cha1=ggplot(alpha, aes(x=Phenotype, y=S.chao1, fill=Phenotype)) + 
+  stat_boxplot(geom = "errorbar")  + 
+  geom_boxplot(alpha = 1) +  
+  scale_fill_manual(values=c("#00607A", "#A44200"))  + 
+  facet_grid(~Time) + 
+  theme_bw() + labs( y= "Chao1 estimated richness", x="") 
+
+pdf("./outputs/SuperCorals_AlphaDiversiy.pdf", width=5,height=5, pointsize = 12)
+shan/cha1
 dev.off()
-
-
-#####################################################
-######## Stats on community composition ############
-####################################################
-library(vegan)
-library(pairwiseAdonis)
-#otu.n=as.data.frame(t(sweep(otu,2,colSums(otu),"/")))
-otu.n=data.frame(t(otu_table(phy.t)))
-otu.n$Time=map$Time[match(rownames(otu.n), rownames(map))]
-otu.n$Phenotype=map$Phenotype[match(rownames(otu.n), rownames(map))]
-otu.n$group=paste(otu.n$Phenotype,otu.n$Time)
-
-#betadisper
-distance=vegdist(otu.n[,1:3520], method = "euclidean")
-#distance=vegdist(otu.n[,1:3520], method = "bray")
-
-beta_phenotype=betadisper(distance, otu.n$Phenotype)
-permutest(beta_phenotype, permutations = 99, pairwise = TRUE) 
-
-beta_time=betadisper(distance, otu.n$Time)
-permutest(beta_time, permutations = 99, pairwise = TRUE) 
-
-beta=betadisper(distance, otu.n$group)
-permutest(beta, permutations = 99, pairwise = TRUE) 
-
-##overal model
-adonis=adonis(otu.n[,1:3520]~ otu.n$Phenotype * otu.n$Time, method = "euclidean" )
-adonis_df=as.data.frame(adonis[["aov.tab"]])
-write.table(adonis_df, "outputs/overall_adonis.txt", sep = "\t", row.names = T, quote = F)
-
-#all comparisons
-all_pairWadonis_df=pairwise.adonis(otu.n[,1:3520], otu.n$group,  sim.method = "euclidean", p.adjust.m = "fdr", perm = 9999) 
-write.table(all_pairWadonis_df, "outputs/pairwiseAdonis_field.txt", sep = "\t", row.names = F, quote = F)
-s
